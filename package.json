@@ -1,0 +1,28 @@
+{
+  "name": "fletgram",
+  "version": "1.0.0",
+  "exports": {
+    ".": {
+      "require": "./index.cjs",
+      "import": "./index.mjs"
+    }
+  },
+  "bin": {
+    "bare": "bin/bare"
+  },
+  "files": [
+    "index.cjs",
+    "index.mjs",
+    "bin"
+  ],
+  "author": "Holepunch",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/holepunchto/bare/issues"
+  },
+  "homepage": "https://github.com/holepunchto/bare",
+  "dependencies": {
+    "bare-runtime": "1.15.0"
+  },
+  "private": true
+}
