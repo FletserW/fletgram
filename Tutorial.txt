@@ -1,0 +1,42 @@
+//Iniciar Projeto
+npx create-expo-app fletgram --template bare
+cd fletgram
+npm install expo
+npx expo prebuild
+npm install --save-dev @react-native-community/cli
+
+//Navegação
+npm install @react-navigation/native @react-navigation/stack
+npm install react-native-screens react-native-safe-area-context
+npm install react-native-gesture-handler
+npm install @types/react-navigation
+npm install @react-navigation/bottom-tabs
+
+//Eslilização
+npm install nativewind tailwindcss react-native-reanimated@3.16.2 react-native-safe-area-contexttgram>
+npx tailwindcss init 
+
+//Memoria local
+npm install @react-native-async-storage/async-storage
+
+//Icons
+npm install lucide-react-native react-native-svg
+
+//Data e hora
+npm install date-fns
+npm install --save-dev @types/date-fns
+
+
+//copilar projeto
+npx expo prebuild
+npx react-native start
+npx react-native run-android
+
+//Criar apk
+cd android
+./gradlew assembleRelease
+
+//Iniciar servidor 
+lt --port 8082 --subdomain fletgram
+ taskkill /F /IM node.exe
+ ngrok http --url=electric-polished-perch.ngrok-free.app 80

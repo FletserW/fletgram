@@ -1,6 +1,6 @@
 {
   "name": "fletgram",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "exports": {
     ".": {
       "require": "./index.cjs",
@@ -15,14 +15,50 @@
     "index.mjs",
     "bin"
   ],
-  "author": "Holepunch",
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "listUnknownPackages": false,
+        "exclude": ["lucide-react-native"]
+      }
+    }
+  },
+  "author": "FletserW",
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/holepunchto/bare/issues"
   },
   "homepage": "https://github.com/holepunchto/bare",
   "dependencies": {
-    "bare-runtime": "1.15.0"
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-navigation/bottom-tabs": "^7.2.0",
+    "@react-navigation/native": "^7.0.14",
+    "@react-navigation/stack": "^7.1.1",
+    "@types/react-navigation": "^3.0.8",
+    "bare-runtime": "1.15.0",
+    "date-fns": "^4.1.0",
+    "expo": "^52.0.35",
+    "lucide-react-native": "^0.475.0",
+    "react": "18.3.1",
+    "react-native": "0.76.7",
+    "react-native-gesture-handler": "~2.20.2",
+    "react-native-image-picker": "^8.1.0",
+    "react-native-reanimated": "^3.16.2",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-svg": "15.8.0",
+    "tailwindcss": "^3.4.17"
   },
-  "private": true
+  "private": true,
+  "scripts": {
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "latest",
+    "@types/date-fns": "^2.5.3",
+    "babel-preset-expo": "^12.0.8",
+    "nativewind": "^4.1.23",
+    "typescript": "^5.3.3"
+  }
 }

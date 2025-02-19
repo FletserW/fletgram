@@ -1,4 +1,10 @@
 {
   "name": "Fletgram",
-  "slug": "Fletgram"
+  "slug": "Fletgram",
+  "web": {
+    "bundler": "metro"
+  },
+  "android": {
+    "package": "com.fletserTech.Fletgram"
+  }
 }
