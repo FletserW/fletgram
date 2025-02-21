@@ -10,6 +10,7 @@ import {
   StyleSheet,
   FlatList,
   Platform,
+  Dimensions,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
 } from "react-native";
@@ -27,7 +28,11 @@ interface Props {
   posts: Post[];
   stories: Story[];
   isDarkMode: boolean;
-  toggleLikePost: (postId: number, userId: string, setPosts: React.Dispatch<React.SetStateAction<Post[]>>) => Promise<void>;
+  toggleLikePost: (
+    postId: number,
+    userId: string,
+    setPosts: React.Dispatch<React.SetStateAction<Post[]>>
+  ) => Promise<void>;
   openCommentModal: (postId: number) => void;
   openImageModal: (imageUrl: string) => void;
   isModalVisible: boolean;
@@ -46,6 +51,8 @@ interface Props {
   commentsCount: { [key: number]: number };
 }
 
+const screenWidth = Dimensions.get("window").width;
+
 const formatTimeAgo = (createdAt: string | undefined) => {
   if (!createdAt) return "Data inválida";
 
@@ -53,11 +60,14 @@ const formatTimeAgo = (createdAt: string | undefined) => {
   if (isNaN(createdDate.getTime())) return "Data inválida";
 
   const now = new Date();
-  const diffInSeconds = Math.floor((now.getTime() - createdDate.getTime()) / 1000);
+  const diffInSeconds = Math.floor(
+    (now.getTime() - createdDate.getTime()) / 1000
+  );
 
   if (diffInSeconds < 60) return `${diffInSeconds}s atrás`;
   if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m atrás`;
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h atrás`;
+  if (diffInSeconds < 86400)
+    return `${Math.floor(diffInSeconds / 3600)}h atrás`;
   return `${Math.floor(diffInSeconds / 86400)}d atrás`;
 };
 
@@ -67,6 +77,10 @@ const SafeText = ({ children, style }: { children: any; style?: any }) => {
   }
   return <Text style={style}>{children}</Text>;
 };
+
+console.log(
+  "=-=-=-=-=-=-=-=-=-=-=-=-= inicio Post Display -=-=-=-=-=-=-=-=-=-=-=-=-=-=-"
+);
 
 export const PostDisplay: React.FC<Props> = ({
   isDarkMode,
@@ -86,23 +100,34 @@ export const PostDisplay: React.FC<Props> = ({
   toggleLikePost,
   userId,
   setPosts,
-  commentsCount
+  commentsCount,
 }) => {
   return (
     <ScrollView>
       {/* Stories */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.storiesContainer}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.storiesContainer}
+      >
         {stories.length > 0 ? (
           stories.map((story) => (
             <View key={story.id} style={styles.storyItem}>
               <Image source={{ uri: story.image }} style={styles.storyImage} />
-              <SafeText style={[styles.storyUsername, { color: isDarkMode ? "#fff" : "#000" }]}>
+              <SafeText
+                style={[
+                  styles.storyUsername,
+                  { color: isDarkMode ? "#fff" : "#000" },
+                ]}
+              >
                 {String(story.username ?? "Usuário")}
               </SafeText>
             </View>
           ))
         ) : (
-          <SafeText style={styles.noStoriesText}>Ainda não há stories.</SafeText>
+          <SafeText style={styles.noStoriesText}>
+            Ainda não há stories.
+          </SafeText>
         )}
       </ScrollView>
 
@@ -112,45 +137,128 @@ export const PostDisplay: React.FC<Props> = ({
           posts.map((post) => (
             <View key={post.id} style={styles.post}>
               {/* Cabeçalho do Post */}
-              <View style={[styles.postHeader, { backgroundColor: isDarkMode ? "#374151" : "#d1d5db" }]}>
-                <Image source={{ uri: post.profilePicture }} style={styles.postProfilePicture} />
-                <SafeText style={[styles.postUsername, { color: isDarkMode ? "#fff" : "#000" }]}>
+              <View
+                style={[
+                  styles.postHeader,
+                  { backgroundColor: isDarkMode ? "#374151" : "#d1d5db" },
+                ]}
+              >
+                <Image
+                  source={{ uri: post.profilePicture }}
+                  style={styles.postProfilePicture}
+                />
+                <SafeText
+                  style={[
+                    styles.postUsername,
+                    { color: isDarkMode ? "#fff" : "#000" },
+                  ]}
+                >
                   {String(post.username)}
+                </SafeText>
+                {/* Exibe o tempo da postagem */}
+                <SafeText
+                  style={[
+                    styles.postTime,
+                    { color: isDarkMode ? "#ccc" : "#555" },
+                  ]}
+                >
+                  {formatTimeAgo(post.createdAt)}
                 </SafeText>
               </View>
 
-              {/* Imagem do Post */}
-              <TouchableOpacity onPress={() => openImageModal(post.content)}>
-                <Image source={{ uri: post.content }} style={styles.postImage} />
-              </TouchableOpacity>
+              {/* Exibição das imagens em carrossel */}
+              <View style={styles.imageContainer}>
+                {Array.isArray(post.image_url) && post.image_url.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                  >
+                    {post.image_url.map((imageUrl, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => openImageModal(imageUrl)}
+                      >
+                        <Image
+                          source={{ uri: imageUrl }}
+                          style={styles.postImage}
+                          onError={(e) => {
+                            console.error(
+                              "Erro ao carregar imagem:",
+                              e.nativeEvent.error
+                            );
+                          }}
+                          onLoad={() =>
+                            console.log("Imagem carregada:", imageUrl)
+                          }
+                          resizeMode="cover" // Ajuste para cobrir sem distorcer
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text>Imagem não disponível</Text>
+                )}
+              </View>
 
               {/* Ações (Curtir e Comentar) */}
-              <View style={[styles.postActions, { backgroundColor: isDarkMode ? "#4b5563" : "#e5e7eb" }]}>
-                <TouchableOpacity style={styles.actionButton} onPress={() => toggleLikePost(post.id, userId, setPosts)}>
-                  <Heart color={post.liked ? "red" : isDarkMode ? "#fff" : "#000"} size={24} />
+              <View
+                style={[
+                  styles.postActions,
+                  { backgroundColor: isDarkMode ? "#4b5563" : "#e5e7eb" },
+                ]}
+              >
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => toggleLikePost(post.id, userId, setPosts)}
+                >
+                  <Heart
+                    color={post.liked ? "red" : isDarkMode ? "#fff" : "#000"}
+                    size={24}
+                  />
                   <SafeText style={styles.actionCount}>{post.likes}</SafeText>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.actionButton} onPress={() => openCommentModal(post.id)}>
-                  <MessageCircle color={isDarkMode ? "#fff" : "#000"} size={24} />
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => openCommentModal(post.id)}
+                >
+                  <MessageCircle
+                    color={isDarkMode ? "#fff" : "#000"}
+                    size={24}
+                  />
                   <SafeText>{String(commentsCount[post.id] ?? "0")}</SafeText>
                 </TouchableOpacity>
               </View>
             </View>
           ))
         ) : (
-          <SafeText style={styles.noPostsText}>Ainda não há postagens.</SafeText>
+          <SafeText style={styles.noPostsText}>
+            Ainda não há postagens.
+          </SafeText>
         )}
       </ScrollView>
 
       {/* Modal de Imagem */}
-      <Modal visible={isModalVisible} transparent animationType="fade" onRequestClose={closeImageModal}>
+      <Modal
+        visible={isModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeImageModal}
+      >
         <View style={styles.modalBackground}>
-          <TouchableOpacity style={styles.closeButton} onPress={closeImageModal}>
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={closeImageModal}
+          >
             <SafeText style={styles.closeButtonText}>X</SafeText>
           </TouchableOpacity>
           {selectedImage ? (
-            <Image source={{ uri: selectedImage }} style={styles.fullScreenImage} resizeMode="contain" />
+            <Image
+              source={{ uri: selectedImage }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
           ) : (
             <SafeText>Imagem não disponível</SafeText>
           )}
@@ -161,16 +269,26 @@ export const PostDisplay: React.FC<Props> = ({
       <Modal visible={isCommentModalVisible} transparent animationType="slide">
         <TouchableWithoutFeedback onPress={closeCommentModal}>
           <View style={styles.modalBackground}>
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalContainer}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={styles.modalContainer}
+            >
               <FlatList
                 data={comments}
                 keyExtractor={(comment) => String(comment.id)}
                 renderItem={({ item: comment }) => (
                   <View style={styles.comment}>
                     <View style={styles.commentHeader}>
-                      <Image source={{ uri: comment.profilePicture }} style={styles.profilePicture} />
-                      <SafeText style={styles.username}>{comment.username}</SafeText>
-                      <SafeText style={styles.commentTime}>{formatTimeAgo(comment.created_at)}</SafeText>
+                      <Image
+                        source={{ uri: comment.profilePicture }}
+                        style={styles.profilePicture}
+                      />
+                      <SafeText style={styles.username}>
+                        {comment.username}
+                      </SafeText>
+                      <SafeText style={styles.commentTime}>
+                        {formatTimeAgo(comment.created_at)}
+                      </SafeText>
                     </View>
                     <SafeText>{comment.content}</SafeText>
                   </View>
@@ -196,8 +314,18 @@ export const PostDisplay: React.FC<Props> = ({
   );
 };
 
-
 const styles = StyleSheet.create({
+  noImageText: {
+    color: "#6b7280",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  imageContainer: {
+    flexDirection: "row", // Imagens lado a lado
+    flexWrap: "wrap", // Permite que as imagens se ajustem à linha quando necessário
+    justifyContent: "flex-start", // Alinha as imagens no início da linha
+    marginBottom: 0,
+  },
   scrollView: {
     flex: 1,
   },
@@ -270,14 +398,22 @@ const styles = StyleSheet.create({
     marginLeft: "auto",
   },
   postImage: {
-    width: "100%",
-    height: 256,
+    width: screenWidth - 32, // Subtrai o paddingHorizontal de 16 de cada lado (total 32)
+    height: 300, // Ajuste a altura conforme necessário
+    marginBottom: 0,
+    flexShrink: 0,
   },
+
   postActions: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 8,
+    marginTop: 0, // Remove qualquer espaço acima da tarja de ações
+    marginBottom: 0, // Garantir que não há margem inferior
+    borderBottomLeftRadius: 12, // Arredonda a borda inferior esquerda
+    borderBottomRightRadius: 12, // Arredonda a borda inferior direita
+    zIndex: 10,
   },
   actionButton: {
     flexDirection: "row",
@@ -315,6 +451,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
   },
+
   commentList: {
     flex: 1, // Permite que a lista ocupe todo o espaço disponível
     backgroundColor: "#fff",
@@ -401,9 +538,8 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15, // Torna a imagem redonda
-    marginRight: 10,  // Espaço entre a imagem e o nome
+    marginRight: 10, // Espaço entre a imagem e o nome
   },
-
 });
 
 export default PostDisplay;

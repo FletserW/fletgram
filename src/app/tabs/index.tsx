@@ -108,83 +108,71 @@ const FletgramFeed = () => {
       console.log("UserId is null, aborting fetch.");
       return;
     }
-
+  
     try {
       const followingResponse = await fetch(
         `${BASE_URL}/followers/${userId}/following`
       );
       const followingData = await followingResponse.json();
-
+  
       const storyData = await Promise.all(
         followingData.map(async (follow: { userId: number }) => {
           const profileResponse = await fetch(
             `${BASE_URL}/users/${follow.userId}/profilePicture`
           );
           const profileData = await profileResponse.json();
-
+  
           const userResponse = await fetch(
             `${BASE_URL}/users/${follow.userId}`
           );
           const userData = await userResponse.json();
-
+  
           const postsResponse = await fetch(
             `${BASE_URL}/posts/user/${follow.userId}`
           );
           const postsData = await postsResponse.json();
-
+  
           const postsWithLikes = await Promise.all(
-            postsData.map(
-              async (post: {
-                id: number;
-                content: string;
-                createdAt: string;
-              }) => {
+            postsData.map(async (post: { id: number; content: string; createdAt: string; image_url: string | string[] }) => {
+              try {
+                const likesResponse = await fetch(
+                  `${BASE_URL}/likes/count/${post.id}`
+                );
+                const likesText = await likesResponse.text();
+                let likesCount = 0;
+  
                 try {
-                  const likesResponse = await fetch(
-                    `${BASE_URL}/likes/count/${post.id}`
-                  );
-                  const likesText = await likesResponse.text(); // Pega o texto da resposta
-                  let likesCount = 0;
-
-                  try {
-                    const likesJson = JSON.parse(likesText);
-                    likesCount = likesJson ?? 0; // Se o JSON tiver "count", pegamos ele
-                  } catch (error) {
-                    likesCount = parseInt(likesText, 10) || 0; // Se for um número direto, tentamos converter
-                  }
-
-                  console.log(
-                    `Post ID: ${post.id}, Likes Count: ${likesCount}`
-                  );
-
-                  return {
-                    id: post.id,
-                    userId: follow.userId,
-                    content: post.content,
-                    username: userData.username,
-                    profilePicture: profileData.profile_picture,
-                    createdAt: post.createdAt,
-                    likes: likesCount, // Usa o número de curtidas correto
-                  };
+                  const likesJson = JSON.parse(likesText);
+                  likesCount = likesJson ?? 0;
                 } catch (error) {
-                  console.error(
-                    `Erro ao buscar curtidas para post ${post.id}:`,
-                    error
-                  );
-                  return {
-                    id: post.id,
-                    userId: follow.userId,
-                    content: post.content,
-                    username: userData.username,
-                    profilePicture: profileData.profile_picture,
-                    createdAt: post.createdAt,
-                    likes: 0, // Se houver erro, assume 0 curtidas
-                  };
+                  likesCount = parseInt(likesText, 10) || 0;
                 }
+  
+                return {
+                  id: post.id,
+                  userId: follow.userId,
+                  content: post.content,
+                  username: userData.username,
+                  profilePicture: profileData.profile_picture,
+                  createdAt: post.createdAt,
+                  image_url: post.image_url,  // Garantindo que o campo seja image_url
+                  likes: likesCount,
+                };
+              } catch (error) {
+                return {
+                  id: post.id,
+                  userId: follow.userId,
+                  content: post.content,
+                  username: userData.username,
+                  profilePicture: profileData.profile_picture,
+                  createdAt: post.createdAt,
+                  image_url: [],  // Caso não haja imagem, atribuímos um array vazio
+                  likes: 0,
+                };
               }
-            )
+            })
           );
-
+  
           return {
             id: follow.userId,
             username: userData.username,
@@ -193,49 +181,55 @@ const FletgramFeed = () => {
           };
         })
       );
-
+  
       const allPosts = storyData.flatMap((story) => story.posts);
       const sortedPosts = allPosts.sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
-
+  
       setStories(storyData);
       setPosts(sortedPosts);
     } catch (error) {
       console.error("Erro ao buscar stories e postagens:", error);
     }
   };
-
+  
   const fetchPosts = async () => {
     if (!userId) return;
-
+  
     try {
-      const response = await fetch(`${BASE_URL}/posts`);
+      const response = await fetch(`${BASE_URL}/posts/all`);
       const data = await response.json();
-
+  
       const postsWithLikes = await Promise.all(
         data.map(async (post) => {
           const likesResponse = await fetch(
             `${BASE_URL}/likes/count/${post.id}`
           );
           const likesData = await likesResponse.json();
-
-          // Verifica se o usuário já curtiu o post
+  
           const checkLikeResponse = await fetch(
             `${BASE_URL}/likes/${userId}/check/${post.id}`
           );
           const checkLikeData = await checkLikeResponse.json();
-
-          return { ...post, likes: likesData, liked: checkLikeData.liked };
+  
+          // Agora a propriedade 'image_url' é renomeada para 'imageUrl'
+          return {
+            ...post,
+            likes: likesData,
+            liked: checkLikeData.liked,
+            imageUrl: post.image_url, // Mantém o nome da propriedade de acordo com o tipo
+          };
         })
       );
-
+  
       setPosts(postsWithLikes);
     } catch (error) {
       console.error("Erro ao buscar postagens:", error);
     }
   };
+  
 
   const formatPostTime = (createdAt: string) => {
     const now = new Date();
