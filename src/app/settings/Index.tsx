@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react"; 
 import { View, Text, TouchableOpacity, ScrollView, Switch, StyleSheet } from "react-native";
 import { Shield, FileUser, Bookmark, Clock, Lock, Users, Layers, Bell, EyeOff, MessageSquare, AtSign, Archive, UserX, ChevronLeft } from "lucide-react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "@react-navigation/native";
 import type { NavigationProps } from "../../constants/types";
 
-const handleLogout = async () => {
-  const navigation = useNavigation<NavigationProps>();
+const handleLogout = async (navigation: any) => {
   try {
+    console.log("Sair");
     await AsyncStorage.removeItem("authToken");
     await AsyncStorage.removeItem("id");
-    navigation.navigate("Home")
+    navigation.navigate("Home"); // Navegar para a tela "Home"
   } catch (error) {
     console.error("Erro ao fazer logout", error);
   }
@@ -62,7 +62,7 @@ export default function SettingsScreen() {
 
   const authOptions = [
     { title: "Adicionar conta" },
-    { title: "Sair", onPress: handleLogout },
+    { title: "Sair", onPress: () => handleLogout(navigation) },  
     { title: "Desconectar todas as contas" },
   ];
 

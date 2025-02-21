@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Image, Alert, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Image, Alert, Text, TouchableOpacity, StyleSheet, ScrollView } from "react-native";
 import { launchImageLibrary, MediaType, ImageLibraryOptions } from "react-native-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Button } from "../../components/ui/Button";
@@ -9,8 +9,8 @@ import { useNavigation, CommonActions } from "@react-navigation/native";
 import type { NavigationProps } from "../../constants/types";
 
 const PostScreen = () => {
-  const [image, setImage] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [images, setImages] = useState<string[]>([]);  // Armazena as imagens selecionadas
   const navigation = useNavigation<NavigationProps>();
 
   useEffect(() => {
@@ -21,91 +21,74 @@ const PostScreen = () => {
     loadTheme();
   }, []);
 
-  const pickImage = () => {
+  // Função para selecionar múltiplas imagens
+  const pickImages = async () => {
     const options: ImageLibraryOptions = {
       mediaType: "photo" as MediaType,
-      includeBase64: false,
-      maxHeight: 800,
-      maxWidth: 800,
-      quality: 1,
-      selectionLimit: 1,
+      selectionLimit: 5, // Limite de 5 imagens
     };
 
     launchImageLibrary(options, (response) => {
-      if (response.didCancel) {
-        console.log("Usuário cancelou a seleção de imagem");
-      } else if (response.errorMessage) {
-        console.log("Erro ao selecionar imagem:", response.errorMessage);
-      } else if (response.assets && response.assets.length > 0) {
-        const uri = response.assets[0].uri;
-        setImage(uri);
+      if (!response.didCancel && !response.errorMessage && response.assets) {
+        // Verifique se há imagens e atualize o estado com as novas imagens
+        const selectedImages = response.assets.map((asset) => asset.uri);
+        setImages((prevImages) => [...prevImages, ...selectedImages]);  // Adiciona as novas imagens às anteriores
       }
     });
   };
 
-  const saveImageToServer = async () => {
-    if (!image) {
-      Alert.alert("Erro", "Escolha uma imagem antes de enviar.");
+  // Função para salvar as imagens no servidor
+  const saveImagesToServer = async () => {
+    if (images.length === 0) {
+      Alert.alert("Erro", "Escolha pelo menos uma imagem.");
       return;
     }
-
+  
     try {
       let userId = await AsyncStorage.getItem("id");
       if (!userId) {
         Alert.alert("Erro", "Usuário não encontrado.");
         return;
       }
-
-      let localUri = image;
-      let filename = localUri.split("/").pop();
-      let match = /\.(\w+)$/.exec(filename ?? "");
-      let type = match ? `image/${match[1]}` : `image`;
-
+  
       let formData = new FormData();
-      formData.append("file", {
-        uri: localUri,
-        name: filename,
-        type,
-      } as any);
-
-      const uploadResponse = await fetch(`${BASE_URL}/uploads/`, {
+  
+      // Adicionar o userId como um campo do FormData
+      formData.append("userId", userId);
+  
+      // Adicionar as imagens ao FormData
+      images.forEach((imageUri, index) => {
+        let filename = imageUri.split("/").pop();
+        let type = `image/${filename.split(".").pop()}`;
+  
+        formData.append("files", {
+          uri: imageUri,
+          name: filename,
+          type,
+        } as any);
+      });
+  
+      const postResponse = await fetch(`${BASE_URL}/posts/`, {
         method: "POST",
         body: formData,
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+        headers: { "Content-Type": "multipart/form-data" },
       });
-
-      if (!uploadResponse.ok) {
-        throw new Error("Falha ao enviar a imagem.");
-      }
-
-      const uploadData = await uploadResponse.json();
-      const imageUrl = uploadData.url;
-
-      console.log("Imagem salva:", imageUrl);
-
-      const postResponse = await fetch(`${BASE_URL}/posts/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: `userId=${userId}&content=${encodeURIComponent(imageUrl)}`,
-      });
-
+  
       if (!postResponse.ok) {
+        const errorText = await postResponse.text();
+        console.error("Erro na criação do post: ", errorText);
         throw new Error("Erro ao criar o post.");
       }
-
-      Alert.alert("Sucesso", "Post criado com sucesso!");
-      setImage(null);
-
+  
+      Alert.alert("Sucesso", "Post criado!");
+      setImages([]); // Limpa as imagens após o envio
+      navigation.dispatch(CommonActions.goBack()); // Retorna para a tela anterior
     } catch (error) {
-      console.error("Erro:", error);
-      Alert.alert("Algo deu errado.");
+      Alert.alert("Erro", "Algo deu errado.");
+      console.error("Erro detalhado:", error);
     }
   };
-
+  
   return (
     <View style={[styles.container, { backgroundColor: isDarkMode ? '#000' : '#f3f4f6' }]}>
       <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -117,28 +100,24 @@ const PostScreen = () => {
         </Text>
       </View>
 
-      {image && (
-        <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: image }}
-            style={styles.image}
-          />
-        </View>
-      )}
+      {/* Exibição das imagens selecionadas */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectedImagesContainer}>
+        {images.length > 0 && images.map((image, index) => (
+          <Image key={index} source={{ uri: image }} style={styles.selectedImage} />
+        ))}
+      </ScrollView>
 
       <View style={styles.buttonsContainer}>
         <Button
           buttonText="Escolher da galeria"
-          onPress={pickImage}
-          style={[styles.button, { backgroundColor: '#dc2626' }]}
-
+          onPress={pickImages}
+          style={[styles.button, { backgroundColor: '#9d3520' }]}
         />
         <Button
           buttonText="Postar imagem"
-          onPress={saveImageToServer}
-          disabled={!image}
-          style={[styles.button, { backgroundColor: image ? '#dc2626' : '#d1d5db' }]}
-
+          onPress={saveImagesToServer}
+          disabled={images.length === 0}
+          style={[styles.button, { backgroundColor: images.length > 0 ? '#dc2626' : '#9d3520' }]}
         />
       </View>
     </View>
@@ -148,44 +127,36 @@ const PostScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
-  imageContainer: {
-    marginBottom: 24,
+  selectedImagesContainer: {
+    marginTop: 20,
+    flexDirection: 'row',
+    paddingVertical: 10,
   },
-  image: {
-    width: '100%',
-    height: 320,
+  selectedImage: {
+    width: 100,
+    height: 100,
+    marginRight: 10,
     borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   buttonsContainer: {
-    gap: 16,
-  },
-  button: {
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 24,
+    marginTop: 20,
     alignItems: 'center',
   },
-  buttonText: {
-    color: '#fff',
-    fontWeight: '600',
+  button: {
+    width: '80%',
+    padding: 15,
+    marginVertical: 10,
+    borderRadius: 5,
+    alignItems: 'center',
   },
 });
 

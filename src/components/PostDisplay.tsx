@@ -8,14 +8,14 @@ import {
   Modal,
   TextInput,
   StyleSheet,
-  RefreshControl,
+  FlatList,
+  Platform,
+  KeyboardAvoidingView,
   TouchableWithoutFeedback,
 } from "react-native";
 import { Heart, MessageCircle } from "lucide-react-native";
 import { toggleLikePost } from "../services/likeUtils";
-
-import { Post } from "../constants/types"; 
-
+import { Post } from "../constants/types";
 
 interface Story {
   id: number;
@@ -40,11 +40,33 @@ interface Props {
   setNewComment: (text: string) => void;
   handleAddComment: () => Promise<void>;
   onRefresh: () => void;
+  isRefreshing: boolean;
   userId: string;
   setPosts: React.Dispatch<React.SetStateAction<Post[]>>;
-  isRefreshing: boolean;
   commentsCount: { [key: number]: number };
 }
+
+const formatTimeAgo = (createdAt: string | undefined) => {
+  if (!createdAt) return "Data inválida";
+
+  const createdDate = new Date(createdAt);
+  if (isNaN(createdDate.getTime())) return "Data inválida";
+
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - createdDate.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return `${diffInSeconds}s atrás`;
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m atrás`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h atrás`;
+  return `${Math.floor(diffInSeconds / 86400)}d atrás`;
+};
+
+const SafeText = ({ children, style }: { children: any; style?: any }) => {
+  if (typeof children !== "string" && typeof children !== "number") {
+    return <Text style={style}>[Texto inválido]</Text>;
+  }
+  return <Text style={style}>{children}</Text>;
+};
 
 export const PostDisplay: React.FC<Props> = ({
   isDarkMode,
@@ -64,8 +86,6 @@ export const PostDisplay: React.FC<Props> = ({
   toggleLikePost,
   userId,
   setPosts,
-  isRefreshing,
-  onRefresh,
   commentsCount
 }) => {
   return (
@@ -76,11 +96,13 @@ export const PostDisplay: React.FC<Props> = ({
           stories.map((story) => (
             <View key={story.id} style={styles.storyItem}>
               <Image source={{ uri: story.image }} style={styles.storyImage} />
-              <Text style={[styles.storyUsername, { color: isDarkMode ? "#fff" : "#000" }]}>{story.username}</Text>
+              <SafeText style={[styles.storyUsername, { color: isDarkMode ? "#fff" : "#000" }]}>
+                {String(story.username ?? "Usuário")}
+              </SafeText>
             </View>
           ))
         ) : (
-          <Text style={styles.noStoriesText}>Ainda não há stories.</Text>
+          <SafeText style={styles.noStoriesText}>Ainda não há stories.</SafeText>
         )}
       </ScrollView>
 
@@ -92,7 +114,9 @@ export const PostDisplay: React.FC<Props> = ({
               {/* Cabeçalho do Post */}
               <View style={[styles.postHeader, { backgroundColor: isDarkMode ? "#374151" : "#d1d5db" }]}>
                 <Image source={{ uri: post.profilePicture }} style={styles.postProfilePicture} />
-                <Text style={[styles.postUsername, { color: isDarkMode ? "#fff" : "#000" }]}>{post.username}</Text>
+                <SafeText style={[styles.postUsername, { color: isDarkMode ? "#fff" : "#000" }]}>
+                  {String(post.username)}
+                </SafeText>
               </View>
 
               {/* Imagem do Post */}
@@ -104,20 +128,18 @@ export const PostDisplay: React.FC<Props> = ({
               <View style={[styles.postActions, { backgroundColor: isDarkMode ? "#4b5563" : "#e5e7eb" }]}>
                 <TouchableOpacity style={styles.actionButton} onPress={() => toggleLikePost(post.id, userId, setPosts)}>
                   <Heart color={post.liked ? "red" : isDarkMode ? "#fff" : "#000"} size={24} />
-                  <Text style={styles.actionCount}>{post.likes}</Text>
+                  <SafeText style={styles.actionCount}>{post.likes}</SafeText>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.actionButton} onPress={() => openCommentModal(post.id)}>
-  <MessageCircle color={isDarkMode ? "#fff" : "#000"} size={24} />
-  <Text style={styles.actionCount}>
-    {commentsCount[post.id] || 0} 
-  </Text>
-</TouchableOpacity>
+                  <MessageCircle color={isDarkMode ? "#fff" : "#000"} size={24} />
+                  <SafeText>{String(commentsCount[post.id] ?? "0")}</SafeText>
+                </TouchableOpacity>
               </View>
             </View>
           ))
         ) : (
-          <Text style={styles.noPostsText}>Ainda não há postagens.</Text>
+          <SafeText style={styles.noPostsText}>Ainda não há postagens.</SafeText>
         )}
       </ScrollView>
 
@@ -125,12 +147,12 @@ export const PostDisplay: React.FC<Props> = ({
       <Modal visible={isModalVisible} transparent animationType="fade" onRequestClose={closeImageModal}>
         <View style={styles.modalBackground}>
           <TouchableOpacity style={styles.closeButton} onPress={closeImageModal}>
-            <Text style={styles.closeButtonText}>X</Text>
+            <SafeText style={styles.closeButtonText}>X</SafeText>
           </TouchableOpacity>
           {selectedImage ? (
             <Image source={{ uri: selectedImage }} style={styles.fullScreenImage} resizeMode="contain" />
           ) : (
-            <Text style={styles.fullScreenImage}>Imagem não disponível</Text>
+            <SafeText>Imagem não disponível</SafeText>
           )}
         </View>
       </Modal>
@@ -139,40 +161,41 @@ export const PostDisplay: React.FC<Props> = ({
       <Modal visible={isCommentModalVisible} transparent animationType="slide">
         <TouchableWithoutFeedback onPress={closeCommentModal}>
           <View style={styles.modalBackground}>
-            <View style={styles.modalContainer}>
-              <ScrollView style={styles.commentList}>
-                {comments.length > 0 ? (
-                  comments.map((comment) => (
-                    <View key={comment.id} style={styles.comment}>
-                      <Text style={styles.commentText}>
-                        <Text style={styles.username}>{comment.username}:</Text> {comment.content}
-                      </Text>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalContainer}>
+              <FlatList
+                data={comments}
+                keyExtractor={(comment) => String(comment.id)}
+                renderItem={({ item: comment }) => (
+                  <View style={styles.comment}>
+                    <View style={styles.commentHeader}>
+                      <Image source={{ uri: comment.profilePicture }} style={styles.profilePicture} />
+                      <SafeText style={styles.username}>{comment.username}</SafeText>
+                      <SafeText style={styles.commentTime}>{formatTimeAgo(comment.created_at)}</SafeText>
                     </View>
-                  ))
-                ) : (
-                  <Text style={styles.noCommentsText}>Nenhum comentário ainda.</Text>
+                    <SafeText>{comment.content}</SafeText>
+                  </View>
                 )}
-              </ScrollView>
-
-              {/* Input para adicionar comentário */}
+              />
               <View style={styles.commentInputContainer}>
                 <TextInput
                   style={styles.commentInput}
                   placeholder="Adicione um comentário..."
                   value={newComment}
                   onChangeText={setNewComment}
+                  multiline
                 />
                 <TouchableOpacity onPress={handleAddComment}>
-                  <Text style={styles.sendButton}>Enviar</Text>
+                  <SafeText style={styles.sendButton}>Enviar</SafeText>
                 </TouchableOpacity>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </View>
         </TouchableWithoutFeedback>
       </Modal>
     </ScrollView>
   );
 };
+
 
 const styles = StyleSheet.create({
   scrollView: {
@@ -221,7 +244,7 @@ const styles = StyleSheet.create({
     color: "#6b7280",
   },
   postsContainer: {
-    paddingVertical: 12,
+    paddingVertical: 17,
     paddingHorizontal: 16,
   },
   post: {
@@ -293,16 +316,20 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   commentList: {
-    maxHeight: "80%",
+    flex: 1, // Permite que a lista ocupe todo o espaço disponível
     backgroundColor: "#fff",
     padding: 10,
     borderTopLeftRadius: 15,
     borderTopRightRadius: 15,
+    width: "100%",
+    maxHeight: "80%", // Impede que os comentários ultrapassem a tela
   },
   comment: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
+    padding: 10,
+    backgroundColor: "#f1f1f1",
+    borderRadius: 5,
+    marginBottom: 10,
+    width: "100%",
   },
   commentProfile: {
     width: 30,
@@ -313,9 +340,12 @@ const styles = StyleSheet.create({
   commentText: {
     fontSize: 14,
     color: "#000",
+    flexWrap: "wrap", // Permite que o texto quebre a linha
+    alignSelf: "flex-start", // Evita que o texto estique
   },
   username: {
     fontWeight: "bold",
+    color: "#333",
   },
   commentInputContainer: {
     flexDirection: "row",
@@ -332,6 +362,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
     marginRight: 10,
+    minHeight: 40,
+    maxHeight: 120, // Impede que o input fique gigante
   },
   sendButton: {
     color: "#0095f6",
@@ -351,7 +383,27 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 16,
   },
-  
+  commentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between", // Empurra a data para a direita
+    marginBottom: 5,
+  },
+  commentInfo: {
+    flex: 1, // Permite que o nome ocupe o espaço disponível
+  },
+  commentTime: {
+    fontSize: 12,
+    color: "#888",
+    marginTop: 5,
+  },
+  profilePicture: {
+    width: 30,
+    height: 30,
+    borderRadius: 15, // Torna a imagem redonda
+    marginRight: 10,  // Espaço entre a imagem e o nome
+  },
+
 });
 
 export default PostDisplay;

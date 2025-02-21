@@ -9,8 +9,12 @@ import {
   StyleSheet,
   RefreshControl,
   TextInput,
+  SafeAreaView,
   TouchableWithoutFeedback,
+  PanResponder
 } from "react-native";
+import { ErrorBoundary } from "react-error-boundary";
+import { GlobalErrorBoundary } from "../../components/ErrorFallback";
 import { Heart, MessageCircle } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "../../constants/config";
@@ -18,6 +22,8 @@ import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
 import { toggleLikePost } from "../../services/likeUtils";
 import { PostDisplay } from "../../components/PostDisplay";
 import { Post } from "../../constants/types";
+import { ptBR } from "date-fns/locale"; 
+
 
 // Definindo o tipo para os stories
 interface Story {
@@ -44,6 +50,7 @@ const FletgramFeed = () => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [commentsCount, setCommentsCount] = useState<{ [key: number]: number }>({});
+  
 
 
   const getUserId = async () => {
@@ -69,66 +76,30 @@ const FletgramFeed = () => {
     const fetchComments = async () => {
       try {
         const response = await fetch(
-          `https://sua-api.com/posts/${selectedPostId}/comments`
+          `${BASE_URL}/posts/${selectedPostId}`
         );
         const data = await response.json();
-        setComments(Array.isArray(data) ? data : []); // Garante que é um array
+    
+        // Certifique-se de que os dados de 'createdAt' sejam recuperados corretamente
+        setComments(
+          Array.isArray(data)
+            ? data.map((comment) => ({
+                ...comment, // Adiciona todos os dados do comentário
+                createdAt: comment.createdAt, // Certifique-se de que 'createdAt' esteja presente
+              }))
+            : []
+        );
       } catch (error) {
         console.error("Erro ao buscar comentários:", error);
         setComments([]); // Evita erro ao mapear
       }
     };
+    
 
     if (selectedPostId) {
       fetchComments();
     }
-  }, [selectedPostId]);
-
-  useEffect(() => {
-    const fetchPostsAndCommentsCount = async () => {
-      if (!userId) return;
-  
-      try {
-        const postsResponse = await fetch(`${BASE_URL}/posts`);
-        const postsData = await postsResponse.json();
-  
-        const postsWithLikes = await Promise.all(
-          postsData.map(async (post) => {
-            const likesResponse = await fetch(`${BASE_URL}/likes/count/${post.id}`);
-            const likesData = await likesResponse.json();
-  
-            // Verifica se o usuário já curtiu o post
-            const checkLikeResponse = await fetch(`${BASE_URL}/likes/${userId}/check/${post.id}`);
-            const checkLikeData = await checkLikeResponse.json();
-  
-            return { ...post, likes: likesData, liked: checkLikeData.liked };
-          })
-        );
-  
-        setPosts(postsWithLikes);
-  
-        // Agora, vamos buscar a contagem de comentários de cada post
-        const countPromises = postsWithLikes.map(async (post) => {
-          const response = await fetch(`${BASE_URL}/comments/count/${post.id}`);
-          const countData = await response.json();
-          return { postId: post.id, count: countData.count };
-        });
-  
-        const countResults = await Promise.all(countPromises);
-        const newCommentsCount: { [key: number]: number } = {};
-  
-        countResults.forEach(({ postId, count }) => {
-          newCommentsCount[postId] = count;
-        });
-  
-        setCommentsCount(newCommentsCount); // Atualiza o estado de commentsCount
-      } catch (error) {
-        console.error('Erro ao buscar posts e contagem de comentários:', error);
-      }
-    };
-  
-    fetchPostsAndCommentsCount();
-  }, []);
+  }, [selectedPostId]); 
   
   
 
@@ -287,13 +258,15 @@ const FletgramFeed = () => {
     setSelectedPostId(null); // Opcional: limpar o post selecionado
     setComments([]); // Opcional: limpar os comentários ao fechar
   };
+  
 
   const openCommentModal = async (postId: number) => {
-    if (!postId) return; // Evita abrir modal sem um post válido
+    if (!postId) return;
     setSelectedPostId(postId);
     setCommentModalVisible(true);
-    await fetchComments(postId);
+    await fetchComments(postId); 
   };
+  
 
   const fetchComments = useCallback(async (postId: number) => {
     if (!postId) return;
@@ -303,26 +276,39 @@ const FletgramFeed = () => {
       const response = await fetch(url);
   
       if (!response.ok) {
-        console.error(
-          `Erro na requisição: ${response.status} - ${response.statusText}`
-        );
+        console.error(`Erro na requisição: ${response.status} - ${response.statusText}`);
         return;
       }
   
       const data = await response.json();
-      setComments(data);
-      setCommentsCount((prev) => ({
-        ...prev,
-        [postId]: data.length, // Armazena a quantidade de comentários
-      }));
+      console.log('Comentários carregados:', data); // Verifique se os comentários estão sendo retornados
+  
+      const commentsWithUserDetails = await Promise.all(
+        data.map(async (comment: { id: number; content: string; userId: number }) => {
+          const userResponse = await fetch(`${BASE_URL}/users/${comment.userId}`);
+          const userData = await userResponse.json();
+  
+          const profileResponse = await fetch(`${BASE_URL}/users/${comment.userId}/profilePicture`);
+          const profileData = await profileResponse.json();
+  
+          return {
+            ...comment,
+            username: userData.username,
+            profilePicture: profileData.profile_picture,
+          };
+        })
+      );
+  
+      setComments(commentsWithUserDetails);
     } catch (error) {
-      console.error("Erro ao buscar comentários:", error);
+      console.error('Erro ao buscar comentários:', error);
     }
   }, []);
-
+  
+  
   const handleAddComment = async () => {
     if (!newComment.trim() || !selectedPostId || !userId) return;
-
+  
     try {
       const response = await fetch(`${BASE_URL}/comments`, {
         method: "POST",
@@ -333,15 +319,31 @@ const FletgramFeed = () => {
           content: newComment,
         }),
       });
-
+  
       if (response.ok) {
         setNewComment("");
-        fetchComments(selectedPostId);
+      
+        // Buscar os comentários novamente para contar quantos existem
+        const commentsResponse = await fetch(`${BASE_URL}/comments/post/${selectedPostId}`);
+        const commentsData = await commentsResponse.json();
+      
+        // Atualiza a contagem de comentários no estado dos posts
+        setPosts((prevPosts) =>
+          prevPosts.map((post) =>
+            post.id === selectedPostId
+              ? { ...post, commentsCount: Array.isArray(commentsData) ? commentsData.length : 0 }
+              : post
+          )
+        );
+      
+        fetchComments(selectedPostId); // Atualiza os comentários no modal
       }
+      
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
     }
   };
+  
 
   const onRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -350,44 +352,48 @@ const FletgramFeed = () => {
   }, [userId]);
 
   return (
-    <ScrollView style={{ flex: 1, marginTop: 30, backgroundColor: isDarkMode ? 'black' : 'white' }}
-    refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: isDarkMode ? 'black' : 'white' }}>
+      <ScrollView style={{ flex: 1,  backgroundColor: isDarkMode ? 'black' : 'white' }}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />}>
       
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDarkMode ? '#444' : '#ddd' }}>
-        <Text style={{ fontSize: 24, fontWeight: 'bold', color: isDarkMode ? 'white' : 'black' }}>Fletgram</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity style={{ marginRight: 16 }}>
-            <Heart color={isDarkMode ? "white" : "black"} size={24} />
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <MessageCircle color={isDarkMode ? "white" : "black"} size={24} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <PostDisplay
-        posts={posts}
-        isDarkMode={isDarkMode}
-        toggleLikePost={toggleLikePost}
-        openCommentModal={openCommentModal}
-        openImageModal={openImageModal}
-        isModalVisible={isModalVisible}
-        closeImageModal={closeImageModal}
-        selectedImage={selectedImage}
-        isCommentModalVisible={isCommentModalVisible}
-        closeCommentModal={closeCommentModal}
-        comments={comments}
-        newComment={newComment}
-        setNewComment={setNewComment}
-        handleAddComment={handleAddComment}
-        onRefresh={onRefresh}
-        stories={stories}          
-        userId={userId}             
-        setPosts={setPosts}         
-        isRefreshing={isRefreshing} 
-        commentsCount={commentsCount}
-      />
-    </ScrollView>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: isDarkMode ? '#444' : '#ddd' }}>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: isDarkMode ? 'white' : 'black' }}>Fletgram</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity style={{ marginRight: 16 }}>
+              <Heart color={isDarkMode ? "white" : "black"} size={24} />
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <MessageCircle color={isDarkMode ? "white" : "black"} size={24} />
+            </TouchableOpacity>
+          </View>
+        </View>   
+      
+        <GlobalErrorBoundary>
+          <PostDisplay
+            posts={posts}
+            isDarkMode={isDarkMode}
+            toggleLikePost={toggleLikePost}
+            openCommentModal={openCommentModal}
+            openImageModal={openImageModal}
+            isModalVisible={isModalVisible}
+            closeImageModal={closeImageModal}
+            selectedImage={selectedImage}
+            isCommentModalVisible={isCommentModalVisible}
+            closeCommentModal={closeCommentModal}
+            comments={comments}
+            newComment={newComment}
+            setNewComment={setNewComment}
+            handleAddComment={handleAddComment}
+            onRefresh={onRefresh}
+            stories={stories}
+            userId={userId}
+            setPosts={setPosts}
+            isRefreshing={isRefreshing}
+            commentsCount={commentsCount}
+          />
+        </GlobalErrorBoundary>
+      </ScrollView>
+    </SafeAreaView>
 
   );
 };

@@ -20,6 +20,8 @@ export interface Post {
   id: number;
   userId: number;
   content: string;
+  image_url: string[];
+  imageUrl: string;
   username: string;
   profilePicture: string;
   createdAt: string;
