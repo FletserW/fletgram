@@ -7,6 +7,7 @@ import { ChevronLeft } from "lucide-react-native";
 import { BASE_URL } from "../../constants/config";
 import { useNavigation, CommonActions } from "@react-navigation/native";
 import type { NavigationProps } from "../../constants/types";
+import ImagePicker from 'react-native-image-crop-picker'; 
 
 const PostScreen = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -35,8 +36,8 @@ const PostScreen = () => {
         setImages((prevImages) => [...prevImages, ...selectedImages]);  // Adiciona as novas imagens às anteriores
       }
     });
-  };
-
+  }
+  
   // Função para salvar as imagens no servidor
   const saveImagesToServer = async () => {
     if (images.length === 0) {

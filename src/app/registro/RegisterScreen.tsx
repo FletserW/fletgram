@@ -17,6 +17,7 @@ import { InputField } from "../../components/ui/InputField";
 import { SelectText } from "../../components/ui/SelectText";
 import { style } from "./style";
 import { registerUser } from "../../services/authService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function RegisterScreen() {
   const navigation = useNavigation<NavigationProps>();
@@ -32,10 +33,7 @@ export default function RegisterScreen() {
     }
 
     const userData = { full_name: fullName, username, email, password };
-    console.log(
-      "Dados do formulário enviados:",
-      JSON.stringify(userData, null, 2)
-    );
+    console.log("Dados do formulário enviados:", JSON.stringify(userData, null, 2));
 
     try {
       const response = await registerUser(userData);
@@ -46,6 +44,9 @@ export default function RegisterScreen() {
       }
 
       if (response.id) {
+        // Salvando o ID do usuário no AsyncStorage
+        await AsyncStorage.setItem("id", String(response.id)); 
+
         Alert.alert("Sucesso", "Conta criada com sucesso!");
         navigation.dispatch(
           CommonActions.reset({

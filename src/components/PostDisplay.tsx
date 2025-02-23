@@ -53,7 +53,7 @@ interface Props {
 
 const screenWidth = Dimensions.get("window").width;
 
-const formatTimeAgo = (createdAt: string | undefined) => {
+ export const formatTimeAgo = (createdAt: string | undefined) => {
   if (!createdAt) return "Data inválida";
 
   const createdDate = new Date(createdAt);

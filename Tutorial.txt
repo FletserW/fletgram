@@ -26,6 +26,12 @@ npm install lucide-react-native react-native-svg
 npm install date-fns
 npm install --save-dev @types/date-fns
 
+//Recortar imagem
+npm install react-native-image-crop-picker
+npx pod-install
+
+//Atualizar projeto via api
+npm install react-native-update-apk react-native-device-info
 
 //copilar projeto
 npx expo prebuild

@@ -13,6 +13,10 @@ export type RootStackParamList = {
   TempTabs: undefined;
   ProfileScreen2: undefined;
   Temps: undefined;
+  ProfileUserScreen: { userId: string };
+  ChatScreen: { conversationId: number,
+    userId: Number };
+  ConversationsListScreen: { userId: string}
 };
 
 // types.ts

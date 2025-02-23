@@ -4,9 +4,9 @@ import { Heart, MessageCircle } from "lucide-react-native";
 import { Plus, Menu, UserPlus } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "../../constants/config";
-import { useNavigation } from "@react-navigation/native";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
-import type { NavigationProps } from "../../constants/types";
+import type { NavigationProps, RootStackParamList } from "../../constants/types";
 
 
 interface User {
@@ -22,7 +22,9 @@ interface User {
 
 const { width: screenWidth } = Dimensions.get('window');
 
-export default function ProfileScreen() {
+export default function ProfileUserScreen() {
+  const route = useRoute<RouteProp<RootStackParamList, "ProfileUserScreen">>(); // Tipando o route corretamente
+  const { userId } = route.params; // Acessando o parâmetro userId
   const [user, setUser] = useState<User | null>(null);
   const [image, setImage] = useState<string>("https://via.placeholder.com/100");
   const [followers, setFollowers] = useState<number>(0);
@@ -101,18 +103,17 @@ export default function ProfileScreen() {
     }
   };
 
-  const loadUserData = async () => {
-    const storedUserId = await AsyncStorage.getItem("id");
-    if (storedUserId) {
+  const loadUserData = async (userId) => {
+    if (userId) {
       try {
-        const response = await fetch(`${BASE_URL}/users/${storedUserId}`);
+        const response = await fetch(`${BASE_URL}/users/${userId}`);
         if (response.ok) {
           const data = await response.json();
           setUser(data);
-          fetchProfileDataPicture(storedUserId);
-          fetchFollowersCount(storedUserId);
-          fetchFollowingCount(storedUserId);
-          fetchPosts(storedUserId);
+          fetchProfileDataPicture(userId);
+          fetchFollowersCount(userId);
+          fetchFollowingCount(userId);
+          fetchPosts(userId);
         }
       } catch (error) {
         console.error("Erro ao carregar dados do usuário", error);
@@ -121,18 +122,19 @@ export default function ProfileScreen() {
   };
 
   useEffect(() => {
-    loadUserData();
+    // Carregar dados do usuário quando o componente for montado
+    loadUserData(userId);
     const loadThemePreference = async () => {
       const storedTheme = await AsyncStorage.getItem("darkMode");
       setIsDarkMode(storedTheme === "true");
     };
     loadThemePreference();
     onRefresh();
-  }, []);
+  }, [userId]);  // Recarrega os dados quando o userId mudar
 
   const onRefresh = async () => {
     setIsRefreshing(true);
-    await loadUserData();
+    await loadUserData(userId);  // Passando userId para a função
     setIsRefreshing(false);
   };
 
@@ -288,25 +290,6 @@ export default function ProfileScreen() {
           {user?.bio}
         </Text>
         {user?.links && <Text style={styles.links}>{user.links}</Text>}
-      </View>
-
-      {/* Botões */}
-      <View style={styles.buttonsContainer}>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.navigate("ProfileScreen2")}
-        >
-          <Text style={styles.buttonText}>Editar perfil</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.button}>
-          <Text style={styles.buttonText}>Compartilhar perfil</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={() => navigation.navigate("FindPeopleScreen")}
-        >
-          <UserPlus size={15} color="#000" />
-        </TouchableOpacity>
       </View>
 
       {/* Grid de Posts */}

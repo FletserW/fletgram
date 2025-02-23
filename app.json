@@ -1,6 +1,7 @@
 {
   "name": "Fletgram",
   "slug": "Fletgram",
+  "orientation": "portrait",
   "web": {
     "bundler": "metro"
   },

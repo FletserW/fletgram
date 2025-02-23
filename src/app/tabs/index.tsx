@@ -21,8 +21,9 @@ import { BASE_URL } from "../../constants/config";
 import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
 import { toggleLikePost } from "../../services/likeUtils";
 import { PostDisplay } from "../../components/PostDisplay";
-import { Post } from "../../constants/types";
+import { NavigationProps, Post } from "../../constants/types";
 import { ptBR } from "date-fns/locale"; 
+import { useNavigation } from "@react-navigation/native";
 
 
 // Definindo o tipo para os stories
@@ -50,6 +51,7 @@ const FletgramFeed = () => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [commentsCount, setCommentsCount] = useState<{ [key: number]: number }>({});
+  const navigation = useNavigation<NavigationProps>();
   
 
 
@@ -70,6 +72,7 @@ const FletgramFeed = () => {
     getDarkModePreference();
     fetchStoriesAndPosts();
     fetchPosts();
+    onRefresh();
   }, []);
 
   useEffect(() => {
@@ -122,6 +125,10 @@ const FletgramFeed = () => {
           );
           const profileData = await profileResponse.json();
   
+          // Remover cache da imagem adicionando o timestamp
+          const imageUrl = profileData.profile_picture || "https://via.placeholder.com/100";
+          const imageWithCacheBuster = `${imageUrl}?t=${new Date().getTime()}`;
+  
           const userResponse = await fetch(
             `${BASE_URL}/users/${follow.userId}`
           );
@@ -153,7 +160,7 @@ const FletgramFeed = () => {
                   userId: follow.userId,
                   content: post.content,
                   username: userData.username,
-                  profilePicture: profileData.profile_picture,
+                  profilePicture: imageWithCacheBuster, // Usa a imagem com cachebuster
                   createdAt: post.createdAt,
                   image_url: post.image_url,  // Garantindo que o campo seja image_url
                   likes: likesCount,
@@ -164,7 +171,7 @@ const FletgramFeed = () => {
                   userId: follow.userId,
                   content: post.content,
                   username: userData.username,
-                  profilePicture: profileData.profile_picture,
+                  profilePicture: imageWithCacheBuster, // Usa a imagem com cachebuster
                   createdAt: post.createdAt,
                   image_url: [],  // Caso não haja imagem, atribuímos um array vazio
                   likes: 0,
@@ -176,7 +183,7 @@ const FletgramFeed = () => {
           return {
             id: follow.userId,
             username: userData.username,
-            image: profileData.profile_picture,
+            image: imageWithCacheBuster, // Usa a imagem com cachebuster
             posts: postsWithLikes,
           };
         })
@@ -194,6 +201,7 @@ const FletgramFeed = () => {
       console.error("Erro ao buscar stories e postagens:", error);
     }
   };
+  
   
   const fetchPosts = async () => {
     if (!userId) return;
@@ -343,6 +351,7 @@ const FletgramFeed = () => {
     setIsRefreshing(true);
     await fetchStoriesAndPosts();
     setIsRefreshing(false);
+    console.log("UserID index: ", userId)
   }, [userId]);
 
   return (
@@ -357,7 +366,16 @@ const FletgramFeed = () => {
               <Heart color={isDarkMode ? "white" : "black"} size={24} />
             </TouchableOpacity>
             <TouchableOpacity>
-              <MessageCircle color={isDarkMode ? "white" : "black"} size={24} />
+            <MessageCircle 
+  color={isDarkMode ? "white" : "black"} 
+  size={24} 
+  onPress={() => {
+    navigation.navigate('ConversationsListScreen', {
+      userId
+    });
+  }} 
+/>
+
             </TouchableOpacity>
           </View>
         </View>   

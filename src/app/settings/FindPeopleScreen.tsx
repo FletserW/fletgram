@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Switch,
   StyleSheet,
 } from "react-native";
 import { ArrowLeft } from "lucide-react-native";
@@ -25,6 +24,7 @@ export default function FindPeopleScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
+
   const [isDarkMode, setIsDarkMode] = useState(false);
   const navigation = useNavigation<NavigationProps>();
 
@@ -40,16 +40,21 @@ export default function FindPeopleScreen() {
             );
             if (profilePictureResponse.ok) {
               const profileData = await profilePictureResponse.json();
+  
+              // Remover cache da imagem adicionando o timestamp
+              const imageUrl = profileData.profile_picture || "https://via.placeholder.com/150";
+              const imageWithCacheBuster = `${imageUrl}?t=${new Date().getTime()}`;
+  
               return {
                 ...user,
-                profilePicture:
-                  profileData.profile_picture ||
-                  "https://via.placeholder.com/150",
+                profilePicture: imageWithCacheBuster,
               };
             }
+  
+            // Caso a resposta não tenha imagem de perfil, fornecemos um placeholder com cachebuster
             return {
               ...user,
-              profilePicture: "https://via.placeholder.com/150",
+              profilePicture: "https://via.placeholder.com/150?t=" + new Date().getTime(),
             };
           })
         );
@@ -72,23 +77,26 @@ export default function FindPeopleScreen() {
   }) => {
     return (
       <View
-        style={[
-          styles.userCard,
-          isDarkMode ? styles.userCardDark : styles.userCardLight,
-        ]}
+        style={[styles.userCard, isDarkMode ? styles.userCardDark : styles.userCardLight]}
       >
         <Image
           source={{ uri: user.profilePicture }}
           style={styles.profileImage}
         />
         <Text
-          style={[
-            styles.username,
-            isDarkMode ? styles.textWhite : styles.textBlack,
-          ]}
+          style={[styles.username, isDarkMode ? styles.textWhite : styles.textBlack]}
         >
           {user.username}
         </Text>
+        <TouchableOpacity
+          onPress={() => {
+            // Navegar para o ProfileUserScreen passando o userId
+            navigation.navigate("ProfileUserScreen", { userId: user.id });
+          }}
+          
+        >
+          <Text style={styles.textWhite}>Ver perfil</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => onFollow(user.id)}
           style={styles.followButton}
@@ -143,27 +151,16 @@ export default function FindPeopleScreen() {
   }, []);
 
   return (
-    <View
-      style={[styles.container, isDarkMode ? styles.bgBlack : styles.bgWhite]}
-    >
+    <View style={[styles.container, isDarkMode ? styles.bgBlack : styles.bgWhite]}>
       <View
-        style={[
-          styles.header,
-          isDarkMode ? styles.borderDark : styles.borderLight,
-        ]}
+        style={[styles.header, isDarkMode ? styles.borderDark : styles.borderLight]}
       >
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <ArrowLeft size={24} color={isDarkMode ? "white" : "black"} />
         </TouchableOpacity>
-        <Text
-          style={[
-            styles.headerText,
-            isDarkMode ? styles.textWhite : styles.textBlack,
-          ]}
-        >
+        <Text style={[styles.headerText, isDarkMode ? styles.textWhite : styles.textBlack]}>
           Encontrar pessoas
         </Text>
-        <View></View>
       </View>
       <View style={styles.searchContainer}>
         <TextInput
@@ -187,6 +184,7 @@ export default function FindPeopleScreen() {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -214,8 +212,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   userCard: {
-    width: 130,
-    height: 130,
+    width: 180,
+    height: 180,
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,

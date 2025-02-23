@@ -17,6 +17,9 @@ import SettingsScreen from "./settings/Index";
 import PersonalDataScreen from "./settings/PersonalDataScreen";
 import SecurityScreen from "./settings/SecurityScreen";
 import UploadPostScreen from "./tabs/PostScreen";
+import ProfileUserScreen from "./settings/ProfileUserScreen"
+import ChatScreen from "./chat/ChatScreen";
+import ConversationsListScreen from "./chat/ConversationsListScreen";
 
 
 const Tab = createBottomTabNavigator();
@@ -82,6 +85,9 @@ export default function Temp() {
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} options={{ headerShown: false }} />
         <Stack.Screen name="SecurityScreen" component={SecurityScreen} options={{ headerShown: false }} />
         <Stack.Screen name="UpLoadPostScreen" component={UploadPostScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ProfileUserScreen" component={ProfileUserScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ChatScreen" component={ChatScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="ConversationsListScreen" component={ConversationsListScreen} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
