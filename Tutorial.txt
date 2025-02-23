@@ -31,9 +31,10 @@ npm install react-native-image-crop-picker
 npx pod-install
 
 //Atualizar projeto via api
-npm install react-native-update-apk react-native-device-info
+expo install expo-file-system react-native-share react-native-device-info
 
 //copilar projeto
+npx expo-doctor    
 npx expo prebuild
 npx react-native start
 npx react-native run-android
