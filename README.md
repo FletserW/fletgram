@@ -33,7 +33,7 @@ Fletgram é um aplicativo de compartilhamento de fotos e vídeos inspirado no In
 
 1. Clone o repositório:
    ```sh
-   git clone https://github.com/FletserW/Fletgram.git
+   git clone https://github.com/FletserW/FletgramApi.git
    ```
 2. Configure o banco de dados MySQL (crie um banco chamado `fletgrambd`).
 3. Altere as credenciais no arquivo `application.properties`.
