@@ -44,6 +44,6 @@ cd android
 ./gradlew assembleRelease
 
 //Iniciar servidor 
-lt --port 8082 --subdomain fletgram
+ lt --port 8082 --subdomain fletgram
  taskkill /F /IM node.exe
  ngrok http --url=electric-polished-perch.ngrok-free.app 80

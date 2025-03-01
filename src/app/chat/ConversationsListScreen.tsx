@@ -1,20 +1,13 @@
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  TextInput,
-  StyleSheet,
-  Alert,
-  Modal,
-  Button,
-} from "react-native";
+import { View, StyleSheet, Alert } from "react-native";
 import { BASE_URL } from "../../constants/config";
 import { ChevronLeft, User } from "lucide-react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native"; // Para usar o navigate
+import Header from "../../components/ui/conversations/Header";
+import SearchBar from "../../components/ui/conversations/SearchBar";
+import ModalComponent from "../../components/ui/conversations/ModelComponent";
+import ConversationsList from "../../components/ui/conversations/ConversationsList";
 
 const ConversationsListScreen = ({ route, navigation }) => {
   const { userId } = route.params;
@@ -27,54 +20,58 @@ const ConversationsListScreen = ({ route, navigation }) => {
   const [following, setFollowing] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [searchFollowing, setSearchFollowing] = useState("");
+  const [otherUserId, setOtherUserId] = useState("");
 
   useEffect(() => {
-    const loadTheme = async () => {
-      const storedTheme = await AsyncStorage.getItem("darkMode");
-      setIsDarkMode(storedTheme === "true");
-    };
     loadTheme();
-  }, []);
-
-  useEffect(() => {
     fetchConversations();
     fetchFollowing();
   }, [userId]);
 
   useEffect(() => {
-    conversations.forEach((item) => {
-      const otherUsername = item.name;
-      if (
-        otherUsername &&
-        !userProfilePictures[item.id] &&
-        !loadingImages[item.id]
-      ) {
-        fetchProfilePicture(otherUsername, item.id); // Passa o ID para o controle de loading
-      }
-    });
+    fetchProfilePictures();
   }, [conversations]);
+
+  const loadTheme = async () => {
+    const storedTheme = await AsyncStorage.getItem("darkMode");
+    setIsDarkMode(storedTheme === "true");
+  };
 
   const fetchConversations = async () => {
     try {
       const response = await fetch(`${BASE_URL}/conversations/user/${userId}`);
       const data = await response.json();
+      await updateParticipantCount(data);
 
-      // Buscar a quantidade de participantes para cada conversa
-      for (const conversation of data) {
-        const participantCountResponse = await fetch(
-          `${BASE_URL}/conversations/${conversation.id}/participantCount`
-        );
-        const participantCount = await participantCountResponse.json();
-
-        // Atualiza o campo participantCount na conversa
-        conversation.participantCount = participantCount;
+      // Atualizando as conversas para nome e foto de perfil do outro usuário
+      for (let conversation of data) {
+        // Se não for grupo, renomear com o nome do outro usuário
+        if (!conversation.group) {
+          const otherUserId = await fetchOtherUser(conversation.id, userId);
+          const otherUserDetails = await fetchUserDetails(otherUserId);
+          conversation.name = otherUserDetails.username;
+          conversation.profilePicture = await fetchProfilePicture(otherUserId);
+        }
       }
 
       setConversations(data);
       setIsLoading(false);
     } catch (error) {
-      console.error(error);
-      Alert.alert("Erro", "Não foi possível carregar as conversas.");
+      handleFetchError("Não foi possível carregar as conversas.");
+    }
+  };
+
+  // Função para atualizar o número de participantes de cada conversa
+  const updateParticipantCount = async (data) => {
+    for (const conversation of data) {
+      const participantCountResponse = await fetch(
+        `${BASE_URL}/conversations/${conversation.id}/participantCount`
+      ); // Busca a quantidade de participantes da conversa
+      const participantCount = await participantCountResponse.json(); // Converte a resposta em JSON
+      conversation.participantCount = participantCount; // Atualiza a conversa com o número de participantes
+
+      // Obtém o 'otherUser' da conversa (não o usuário atual)
+      await fetchOtherUser(conversation, userId); // Chama a função para buscar o outro usuário
     }
   };
 
@@ -82,276 +79,204 @@ const ConversationsListScreen = ({ route, navigation }) => {
     try {
       const response = await fetch(`${BASE_URL}/followers/${userId}/following`);
       const data = await response.json();
-
-      console.log("Following data:", data); // Verifique a estrutura dos dados
-
-      // Agora, precisamos buscar os usernames e as imagens de perfil de cada pessoa que o usuário segue
-      const followingWithUsernamesAndProfilePics = await Promise.all(
-        data.map(async (follow) => {
-          const userResponse = await fetch(
-            `${BASE_URL}/users/${follow.userId}`
-          );
-          const userData = await userResponse.json();
-
-          // Buscar a imagem de perfil
-          const profilePictureResponse = await fetch(
-            `${BASE_URL}/users/${follow.userId}/profilePicture`
-          );
-          const profilePictureData = await profilePictureResponse.json();
-
-          // Adiciona o username e a imagem de perfil ao objeto
-          return {
-            ...follow,
-            username: userData.username, // Adiciona o username
-            profile_picture:
-              profilePictureData.profile_picture ||
-              "https://via.placeholder.com/50", // Adiciona a foto do perfil, com uma imagem padrão se não houver
-          };
-        })
-      );
-
-      // Armazenar os detalhes completos das pessoas seguidas
-      setFollowing(followingWithUsernamesAndProfilePics);
+      const followingWithDetails = await getFollowingDetails(data);
+      setFollowing(followingWithDetails);
     } catch (error) {
-      console.error(error);
-      Alert.alert("Erro", "Não foi possível carregar os usuários seguidos.");
+      handleFetchError("Não foi possível carregar os usuários seguidos.");
     }
   };
 
-  const fetchProfilePicture = async (otherUsername, conversationId) => {
+  const getFollowingDetails = async (data) => {
+    return Promise.all(
+      data.map(async (follow) => {
+        const user = await fetchUserDetails(follow.userId);
+        const profilePicture = await fetchProfilePicture(follow.userId);
+        return { ...follow, ...user, profile_picture: profilePicture };
+      })
+    );
+  };
+
+  const fetchUserDetails = async (userId) => {
+    const response = await fetch(`${BASE_URL}/users/${userId}`);
+    const data = await response.json();
+    return { username: data.username };
+  };
+
+  const fetchProfilePicture = async (userId) => {
+    try {
+      const response = await fetch(
+        `${BASE_URL}/users/${userId}/profilePicture`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Erro na resposta: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      return (
+        data.profile_picture || "https://fletgram.loca.lt/uploads/profile.png"
+      );
+    } catch (error) {
+      console.error("Erro ao buscar foto de perfil:", error);
+      return "https://fletgram.loca.lt/uploads/profile.png"; // Foto padrão
+    }
+  };
+
+  const fetchProfilePictures = () => {
+    conversations.forEach((item) => {
+      const otherUsername = item.name;
+      //console.log("otherUsername: ", otherUsername);
+      if (
+        otherUsername &&
+        !userProfilePictures[item.id] &&
+        !loadingImages[item.id]
+      ) {
+        fetchProfilePictureByUsername(otherUsername, item.id);
+      }
+    });
+  };
+
+  const fetchProfilePictureByUsername = async (
+    otherUsername,
+    conversationId
+  ) => {
     if (!userProfilePictures[conversationId]) {
       setLoadingImages((prev) => ({ ...prev, [conversationId]: true }));
-      const userIdResponse = await fetch(
-        `${BASE_URL}/users/username/${otherUsername}/id`
-      );
-      const userIdData = await userIdResponse.json();
-      const otherUserId = userIdData.id;
+      const userId = await getUserIdByUsername(otherUsername);
+      const profilePictureUrl = await getProfilePictureUrl(userId);
 
-      const profileResponse = await fetch(
-        `${BASE_URL}/users/${otherUserId}/profilePicture`
-      );
-      const profileData = await profileResponse.json();
-
-      if (profileData && profileData.profile_picture) {
-        let profilePictureUrl = profileData.profile_picture;
-        const cacheBusterUrl = `${profilePictureUrl}?t=${new Date().getTime()}`;
-
-        setUserProfilePictures((prevState) => ({
-          ...prevState,
-          [conversationId]: cacheBusterUrl,
-        }));
-        setLoadingImages((prev) => ({ ...prev, [conversationId]: false }));
-      }
+      updateProfilePictures(conversationId, profilePictureUrl);
     }
+  };
+
+  const getUserIdByUsername = async (otherUsername) => {
+    const response = await fetch(
+      `${BASE_URL}/users/username/${otherUsername}/id`
+    );
+    const data = await response.json();
+    return data.id;
+  };
+
+  const getProfilePictureUrl = async (userId) => {
+    const response = await fetch(`${BASE_URL}/users/${userId}/profilePicture`);
+    const data = await response.json();
+    return data.profile_picture;
+  };
+
+  const updateProfilePictures = (conversationId, profilePictureUrl) => {
+    setUserProfilePictures((prevState) => ({
+      ...prevState,
+      [conversationId]: profilePictureUrl,
+    }));
+    setLoadingImages((prev) => ({ ...prev, [conversationId]: false }));
+  };
+
+  const handleFetchError = (message) => {
+    console.error(message);
+    Alert.alert("Erro", message);
   };
 
   const openConversation = (conversationId) => {
     navigation.navigate("ChatScreen", { conversationId, userId });
   };
 
-  // Função para voltar para a tela anterior
   const goBack = () => {
     navigation.goBack();
   };
 
-  // Filtra as conversas com base na pesquisa
-  const filteredConversations = conversations.filter((item) => {
-    const name = item.username || ""; // Se name for null ou undefined, substitui por uma string vazia
-    return name.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredConversations = conversations.filter((item) =>
+    (item.name?.toLowerCase() ?? "").includes(searchQuery.toLowerCase())
+  );
 
-  const fetchUserDetails = async (userId) => {
+  const fetchOtherUser = async (conversationId, userId) => {
     try {
-      const response = await fetch(`${BASE_URL}/users/${userId}`);
-      const userData = await response.json();
+      // Exibe a URL e os dados enviados
+      console.log(
+        `Buscando participantes na conversa com ID: ${conversationId}`
+      );
 
-      // Acessando o username
-      const username = userData.username;
-      console.log("Username:", username);
+      const response = await fetch(
+        `${BASE_URL}/conversations/${conversationId}/participantIds`
+      );
 
-      // Faça o que precisar com o username, como salvar em um estado ou exibir
+      // Verifica se a resposta foi bem-sucedida
+      if (!response.ok) {
+        throw new Error(
+          `Erro ao buscar participantes. Status: ${response.status}`
+        );
+      }
+
+      // Tenta parsear a resposta como texto
+      const text = await response.text();
+      console.log("Resposta de participantes:", text); // Veja a resposta raw
+
+      let participantIds;
+      try {
+        // Se a resposta for válida, converta-a em JSON
+        participantIds = JSON.parse(text);
+      } catch (jsonError) {
+        throw new Error(
+          "Erro ao parsear a resposta JSON: " + jsonError.message
+        );
+      }
+
+      console.log("IDs dos participantes:", participantIds);
+
+      // Filtra o ID do usuário atual
+      const filteredParticipants = participantIds.filter(
+        (id) => Number(id) !== Number(userId)
+      );
+
+      console.log("IDs dos participantes filtrados:", filteredParticipants);
+
+      if (filteredParticipants.length > 0) {
+        const otherUserId = filteredParticipants[0];
+        console.log("ID do outro usuário encontrado:", otherUserId);
+        setOtherUserId(otherUserId);
+        return otherUserId;
+      } else {
+        console.log("Não foi possível encontrar o outro usuário.");
+        return null;
+      }
     } catch (error) {
-      console.error("Erro ao buscar dados do usuário:", error);
+      console.error("Erro ao buscar o outro usuário:", error);
+      return null;
     }
   };
 
   return (
     <View style={[styles.container, isDarkMode && styles.darkContainer]}>
-      {/* Barra de título */}
-      <View style={[styles.header, isDarkMode && styles.darkHeader]}>
-        <TouchableOpacity onPress={goBack}>
-          <ChevronLeft size={28} color={isDarkMode ? "#fff" : "#000"} />
-        </TouchableOpacity>
-        <Text
-          style={[styles.headerTitle, isDarkMode && styles.darkHeaderTitle]}
-        >
-          Mensagens
-        </Text>
-      </View>
-
-      {/* Campo de pesquisa com o ícone ao lado */}
-      <View
-        style={[
-          styles.searchContainer,
-          isDarkMode && styles.darkSearchContainer,
-        ]}
-      >
-        <TextInput
-          style={[styles.searchInput, isDarkMode && styles.darkSearchInput]}
-          placeholder="Buscar usuário"
-          placeholderTextColor={isDarkMode ? "#bbb" : "#888"}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-
-        {/* Ícone de Lucide ao lado do campo de pesquisa */}
-        <TouchableOpacity onPress={() => setIsModalVisible(true)}>
-          <User size={24} color={isDarkMode ? "#fff" : "#000"} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Modal com a lista de pessoas que o usuário segue */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isModalVisible}
-        onRequestClose={() => setIsModalVisible(false)}
-      >
-        <View style={styles.modalBackground}>
-          <View
-            style={[
-              styles.modalContainer,
-              isDarkMode && styles.darkModalContainer,
-            ]}
-          >
-            <Text
-              style={[styles.modalTitle, isDarkMode && styles.darkModalTitle]}
-            >
-              Pessoas que sigo
-            </Text>
-            <View
-              style={[
-                styles.searchContainer,
-                isDarkMode && styles.darkSearchContainer,
-              ]}
-            >
-              <TextInput
-                style={[
-                  styles.searchInput,
-                  isDarkMode && styles.darkSearchInput,
-                ]}
-                placeholder="Buscar usuário seguido"
-                placeholderTextColor={isDarkMode ? "#bbb" : "#888"}
-                value={searchFollowing}
-                onChangeText={setSearchFollowing} // Atualiza o estado conforme o usuário digita
-              />
-            </View>
-
-            <ScrollView style={styles.modalList}>
-              {following
-                .filter((user) =>
-                  user.username
-                    .toLowerCase()
-                    .includes(searchFollowing.toLowerCase())
-                )
-                .map((user) => (
-                  <View key={user.userId} style={styles.modalItem}>
-                    <Image
-                      source={{
-                        uri: user.profile_picture,
-                      }}
-                      style={styles.modalProfilePicture}
-                    />
-                    <Text
-                      style={[
-                        styles.modalItemName,
-                        isDarkMode && styles.darkModalItemName,
-                      ]}
-                    >
-                      {user.username || "Sem Nome"}
-                    </Text>
-                  </View>
-                ))}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={[
-                styles.closeButton,
-                { backgroundColor: "#9d3520" }, // Cor de fundo
-              ]}
-              onPress={() => setIsModalVisible(false)}
-            >
-              <Text style={styles.closeButtonText}>Fechar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-      <ScrollView>
-        {isLoading ? (
-          <Text
-            style={[styles.loadingText, isDarkMode && styles.darkLoadingText]}
-          >
-            Carregando...
-          </Text>
-        ) : (
-          filteredConversations.map((item) => {
-            const profilePictureUrl = userProfilePictures[item.id] || "";
-
-            return (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.conversationItem,
-                  isDarkMode && styles.darkConversationItem,
-                ]}
-                onPress={() => openConversation(item.id)}
-              >
-                <View
-                  style={[
-                    styles.conversationHeader,
-                    isDarkMode && styles.darkConversationHeader,
-                  ]}
-                >
-                  {loadingImages[item.id] ? (
-                    <View style={styles.profilePicturePlaceholder} />
-                  ) : (
-                    <Image
-                      key={item.id}
-                      source={{
-                        uri:
-                          profilePictureUrl || "https://via.placeholder.com/50",
-                      }}
-                      style={styles.profilePicture}
-                      resizeMode="cover"
-                    />
-                  )}
-                  <Text
-                    style={[
-                      styles.conversationName,
-                      isDarkMode && styles.darkConversationName,
-                    ]}
-                  >
-                    {item.name || "Sem Nome"}
-                  </Text>
-                </View>
-                <Text
-                  style={[
-                    styles.conversationDetails,
-                    isDarkMode && styles.darkConversationDetails,
-                  ]}
-                >
-                  Participantes: {item.participantCount} pessoas
-                </Text>
-              </TouchableOpacity>
-            );
-          })
-        )}
-      </ScrollView>
+      <Header goBack={goBack} isDarkMode={isDarkMode} />
+      <SearchBar
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        isDarkMode={isDarkMode}
+        setIsModalVisible={setIsModalVisible}
+      />
+      <ModalComponent
+        isModalVisible={isModalVisible}
+        setIsModalVisible={setIsModalVisible}
+        following={following}
+        searchFollowing={searchFollowing}
+        setSearchFollowing={setSearchFollowing}
+        isDarkMode={isDarkMode}
+        userId={userId}
+      />
+      <ConversationsList
+        isLoading={isLoading}
+        filteredConversations={filteredConversations}
+        openConversation={openConversation}
+        isDarkMode={isDarkMode}
+        userProfilePictures={userProfilePictures}
+        loadingImages={loadingImages}
+      />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff", // Cor do fundo no modo claro
@@ -529,6 +454,31 @@ const styles = StyleSheet.create({
     color: "#fff", // Cor do texto
     fontSize: 16, // Tamanho da fonte
     fontWeight: "bold", // Peso da fonte
+  },
+  selectedItem: {
+    backgroundColor: "#d3f4d7", // Cor de fundo para itens selecionados
+  },
+  createButton: {
+    backgroundColor: "#4CAF50", // Cor de fundo verde
+    paddingVertical: 12, // Padding vertical para aumentar a altura do botão
+    paddingHorizontal: 20, // Padding horizontal para aumentar a largura do botão
+    borderRadius: 8, // Bordas arredondadas
+    marginTop: 15, // Distância do topo para dar espaçamento
+    alignItems: "center", // Alinha o conteúdo (texto) no centro
+    justifyContent: "center", // Alinha o conteúdo verticalmente no centro
+    shadowColor: "#000", // Cor da sombra
+    shadowOffset: { width: 0, height: 2 }, // Deslocamento da sombra
+    shadowOpacity: 0.2, // Opacidade da sombra
+    shadowRadius: 3, // Raio da sombra
+    elevation: 5, // Sombra para dispositivos Android
+  },
+
+  // Estilo do texto dentro do botão
+  createButtonText: {
+    color: "#fff", // Cor do texto (branco)
+    fontSize: 16, // Tamanho da fonte
+    fontWeight: "bold", // Deixa o texto em negrito
+    textTransform: "uppercase", // Transforma o texto em maiúsculas
   },
 });
 
